@@ -14,6 +14,22 @@ import { runDeveloperAgent } from "./developer/agent.js";
 // Set SLACK_APP_TOKEN (xapp-...) in addition to the bot/signing tokens.
 // ---------------------------------------------------------------------------
 
+// ── Bot profiles ───────────────────────────────────────────────────────────
+// Each agent gets its own Slack display name and emoji avatar so messages
+// appear to come from distinct personas rather than the generic bot account.
+
+const RESEARCHER_PROFILE = {
+  username: "Tover Researcher",
+  icon_emoji: ":mag_right:",
+} as const;
+
+const BUILDER_PROFILE = {
+  username: "Tover Builder",
+  icon_emoji: ":hammer_and_wrench:",
+} as const;
+
+// ── App ────────────────────────────────────────────────────────────────────
+
 const app = new App({
   token: process.env.SLACK_BOT_TOKEN,
   signingSecret: process.env.SLACK_SIGNING_SECRET,
@@ -33,7 +49,11 @@ app.command("/research", async ({ command, ack, respond, client }) => {
     return;
   }
 
-  await respond(`🔍 Researcher agent starting on: *${topic}*…`);
+  await client.chat.postMessage({
+    channel: command.channel_id,
+    text: `🔍 Researcher agent starting on: *${topic}*…`,
+    ...RESEARCHER_PROFILE,
+  });
 
   try {
     const report = await runMarketResearchAgent(topic);
@@ -50,9 +70,14 @@ app.command("/research", async ({ command, ack, respond, client }) => {
           text: { type: "mrkdwn" as const, text: chunk },
         })),
       ],
+      ...RESEARCHER_PROFILE,
     });
   } catch (err) {
-    await respond(`❌ Researcher agent failed: ${(err as Error).message}`);
+    await client.chat.postMessage({
+      channel: command.channel_id,
+      text: `❌ Researcher agent failed: ${(err as Error).message}`,
+      ...RESEARCHER_PROFILE,
+    });
   }
 });
 
@@ -67,7 +92,11 @@ app.command("/build", async ({ command, ack, respond, client }) => {
     return;
   }
 
-  await respond(`🏗️ Developer agent starting…`);
+  await client.chat.postMessage({
+    channel: command.channel_id,
+    text: `🏗️ Developer agent starting…`,
+    ...BUILDER_PROFILE,
+  });
 
   try {
     const summary = await runDeveloperAgent(brief, {
@@ -84,9 +113,14 @@ app.command("/build", async ({ command, ack, respond, client }) => {
           text: { type: "mrkdwn" as const, text: chunk },
         })),
       ],
+      ...BUILDER_PROFILE,
     });
   } catch (err) {
-    await respond(`❌ Developer agent failed: ${(err as Error).message}`);
+    await client.chat.postMessage({
+      channel: command.channel_id,
+      text: `❌ Developer agent failed: ${(err as Error).message}`,
+      ...BUILDER_PROFILE,
+    });
   }
 });
 
@@ -103,13 +137,21 @@ app.command("/pipeline", async ({ command, ack, respond, client }) => {
 
   const channelId = command.channel_id;
 
-  await respond(`🔍 *Pipeline started for:* ${topic}\n_Step 1/2: Researcher agent running…_`);
+  await client.chat.postMessage({
+    channel: channelId,
+    text: `🔍 *Pipeline started for:* ${topic}\n_Step 1/2: Researcher agent running…_`,
+    ...RESEARCHER_PROFILE,
+  });
 
   let report: string;
   try {
     report = await runMarketResearchAgent(topic);
   } catch (err) {
-    await respond(`❌ Researcher agent failed: ${(err as Error).message}`);
+    await client.chat.postMessage({
+      channel: channelId,
+      text: `❌ Researcher agent failed: ${(err as Error).message}`,
+      ...RESEARCHER_PROFILE,
+    });
     return;
   }
 
@@ -127,6 +169,13 @@ app.command("/pipeline", async ({ command, ack, respond, client }) => {
         elements: [{ type: "mrkdwn", text: "_Passing report to Developer agent…_" }],
       },
     ],
+    ...RESEARCHER_PROFILE,
+  });
+
+  await client.chat.postMessage({
+    channel: channelId,
+    text: `🏗️ _Step 2/2: Developer agent running…_`,
+    ...BUILDER_PROFILE,
   });
 
   let buildSummary: string;
@@ -138,6 +187,7 @@ app.command("/pipeline", async ({ command, ack, respond, client }) => {
     await client.chat.postMessage({
       channel: channelId,
       text: `❌ Developer agent failed: ${(err as Error).message}`,
+      ...BUILDER_PROFILE,
     });
     return;
   }
@@ -152,6 +202,7 @@ app.command("/pipeline", async ({ command, ack, respond, client }) => {
         text: { type: "mrkdwn" as const, text: chunk },
       })),
     ],
+    ...BUILDER_PROFILE,
   });
 });
 
@@ -177,4 +228,5 @@ function slugify(text: string): string {
   await app.start();
   console.log("⚡ Tover Slack bot running in Socket Mode");
   console.log("Commands: /research  /build  /pipeline");
+  console.log("Profiles: Tover Researcher (:mag_right:)  |  Tover Builder (:hammer_and_wrench:)");
 })();
